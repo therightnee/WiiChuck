@@ -12,12 +12,10 @@
 Accessory nunchuck1;
 
 //Write to EEPROM for Global Access
-
 bool contCZ = false;
 
 uint8_t trigZ = 0;
 uint8_t trigC = 0;
-
 
 void setup() {
   Serial.begin(115200);
@@ -70,7 +68,7 @@ void loop() {
       buttC = true;
       
  //Mouse Click Code
-  if (buttZ && trigZ == 0)
+  if (buttZ && EEPROM.read(trigZ) == 0)
      trigZ += 1; //Write to EEPROM
      if (buttZ && trigZ == 1)
         Mouse.press(MOUSE_RIGHT);
@@ -82,7 +80,7 @@ void loop() {
         Mouse.release(MOUSE_RIGHT);
         trigZ == 0; //Reset EEPROM
 
-  if (buttC && trigC == 0)
+  if (buttC && EEPROM.read(trigC) == 0)
      trigC += 1; //Write to EEPROM
      if (buttC && trigC == 1)
         Mouse.press(MOUSE_LEFT);
@@ -96,7 +94,7 @@ void loop() {
      
 //Middle Button code
   if (buttC && buttZ)
-    if (contCZ)
+    if (EEPROM.read(contCZ))
       Mouse.release(MOUSE_MIDDLE);
     else
       Mouse.press(MOUSE_MIDDLE);
