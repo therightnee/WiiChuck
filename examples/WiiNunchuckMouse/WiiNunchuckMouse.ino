@@ -7,20 +7,32 @@
 
 #include <WiiChuck.h>
 #include <Mouse.h>
-#include <EEPROM.h>
 
 Accessory nunchuck1;
 
+unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
+unsigned long debounceDelay = 90; // the debounce time; increase if the output flickers
+
+unsigned long holdTime = 120;
+unsigned long switchPressZ = 0;
+unsigned long switchPressC = 0;
+unsigned long switchPressCZ = 0;
+
+
+//Press State Variables
+int trigZ = 0;
+int trigC = 0;
+int trigCZ = 0;
+
+uint8_t deltaX = 0;
+uint8_t deltay = 0;
+
+
 //Write to EEPROM for Global Access
-bool contCZ = false;
-
-uint8_t trigZ = 0;
-uint8_t trigC = 0;
-
 void setup() {
   Serial.begin(115200);
   nunchuck1.begin();
-
+  lastDebounceTime = millis(); 
   if (nunchuck1.type == Unknown) {
     /** If the device isn't auto-detected, set the type explicatly
      *  NUNCHUCK,
@@ -46,62 +58,118 @@ void loop() {
   */
   
   nunchuck1.readData();    // Read inputs and update maps
- 
+  
 //Mouse Move
   uint8_t joystickX = nunchuck1.values[0];
   uint8_t joystickY = nunchuck1.values[1];
 
-  uint8_t deltaX = 0;
-  uint8_t deltay = 0;
-  deltaX = (joystickX - 127)/4;
-  deltay = (128 - joystickY)/4;
+  deltaX = (joystickX - 127)/5;
+  deltay = (128 - joystickY)/5;
 
   Mouse.move(deltaX, deltay, 0);
 
-//Mouse Click Setup
+//Mouse Click Variables
+  uint8_t liveX = nunchuck1.values[10];
+  uint8_t liveY = nunchuck1.values[11];
   bool buttZ = false;
   bool buttC = false;
-
-  if (nunchuck1.values[10] == 255)
+//Convert Press to Bool
+  if (liveX == 255){
       buttZ = true;
-  if (nunchuck1.values[11] == 255)
+  }
+  if (liveY == 255){
       buttC = true;
+  }
       
- //Mouse Click Code
-  if (buttZ && EEPROM.read(trigZ) == 0)
-     trigZ += 1; //Write to EEPROM
-     if (buttZ && trigZ == 1)
-        Mouse.press(MOUSE_RIGHT);
-        trigZ += 1; //Write to EEPROM
-     if (buttZ == false && trigZ == 1)
-        Mouse.click(MOUSE_RIGHT);
-        trigZ == 0; //Reset EEPROM
-      if (buttZ == false && trigZ == 2)
-        Mouse.release(MOUSE_RIGHT);
-        trigZ == 0; //Reset EEPROM
+//Mouse Click Code
 
-  if (buttC && EEPROM.read(trigC) == 0)
-     trigC += 1; //Write to EEPROM
-     if (buttC && trigC == 1)
-        Mouse.press(MOUSE_LEFT);
-        trigC += 1; //Write to EEPROM
-     if (buttC == false && trigC == 1)
-        Mouse.click(MOUSE_LEFT);
-        trigC == 0; //Reset EEPROM
-      if (buttC == false && trigC == 2)
-        Mouse.release(MOUSE_LEFT);
-        trigC == 0; //Reset EEPROM
+if ((millis() - lastDebounceTime) > debounceDelay) {
+
+//Right (button Z)
+  if (buttZ && buttC == false){
+     if (trigZ == 0){
+        trigZ = 1;
+        switchPressZ = millis();
+        //Serial.println("Trigger Right");  
+     }    
+     if (trigZ == 1){
+        if ((millis() - switchPressZ) > holdTime) {
+            Mouse.press(MOUSE_RIGHT);
+            trigZ = 2;
+            //Serial.println("Trigger Right Press");
+        }
+     }  
+  }
      
-//Middle Button code
-  if (buttC && buttZ)
-    if (EEPROM.read(contCZ))
-      Mouse.release(MOUSE_MIDDLE);
-    else
-      Mouse.press(MOUSE_MIDDLE);
-      contCZ == true; //Write to EEPROM
+//Left (button C)
+  if (buttC && buttZ == false){
+     if (trigC == 0){
+        trigC = 1;
+        switchPressC = millis();
+        //Serial.println("Trigger Left");
+     }
+     if (trigC == 1){
+        if ((millis() - switchPressC) > holdTime) {
+            Mouse.press(MOUSE_LEFT);
+            trigC = 2;
+        }
+     }
+  }
+        
+//Middle (button C&Z)
+  if (buttC && buttZ){
+    if (trigCZ == 0){
+        trigCZ = 1;
+        switchPressCZ = millis();
+    }
+    if (trigCZ == 1){
+        if ((millis() - switchPressCZ) > holdTime) {
+            Mouse.press(MOUSE_MIDDLE);
+            trigCZ = 2;
+        }
+     }
+  }
+
+  if (buttZ == false && buttC == false){
+    //Right Click
+    if (trigZ == 1){
+        Mouse.click(MOUSE_RIGHT);
+        trigZ = 0;
+    }  
+    if (trigZ == 2){
+        Mouse.release(MOUSE_RIGHT);
+        trigZ = 0;
+        //Serial.println("Right Press Release");
+    }
+    
+    //Left Click
+    if (trigC == 1){
+        Mouse.click(MOUSE_LEFT);
+        trigC = 0;
+    }
+    if (trigC == 2){
+        Mouse.release(MOUSE_LEFT);
+        trigC = 0;
+    }
+
+    //Middle Click
+    if (trigCZ == 1){
+        Mouse.click(MOUSE_MIDDLE);
+        trigCZ = 0;
+    }
+    if (trigCZ == 2){
+        Mouse.release(MOUSE_MIDDLE);
+        trigCZ = 0;
+    }
+
+    
+  }
+
+  lastDebounceTime = millis(); 
+}
 
 
+    
 //Sensitivity
-delay(10);
-      
+delay(10);  
 }
